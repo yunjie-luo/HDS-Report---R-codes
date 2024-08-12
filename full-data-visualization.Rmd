@@ -1,104 +1,59 @@
 ---
-title: "Untitled"
-author: "Yunjie"
-date: "2024-05-21"
-output: html_document
+title: "Assessment of the DAFNE Education Program for Adults with Type 1 Diabetes"
+authors:
+  - name: Yunjie Luo
+    department: Department of Mathematics and Statistical Sciences
+    affiliation: University of Galway
+    location: Galway, Ireland
+abstract: |
+  **Aim:** This study aimed to evaluate whether group-based follow-up, in contrast to individual follow-up, is equally effective following completion of the Dose Adjustment for Normal Eating (DAFNE) structured education programme.
+  **Method:** This study employed a cluster-randomized controlled trial involving 390 adults diagnosed with type 1 diabetes, who were attending hospital diabetes clinics in Ireland. All participants received the Dose Adjustment for Normal Eating (DAFNE) structured education programme initially. The intervention group received two group education sessions following DAFNE and did not attend subsequent clinics, while the control group received two one-to-one clinic visits post-DAFNE.
+  **Results:** At the 18-month follow-up, there was no statistically significant difference observed in the primary outcome measure, which was the change in HbA1c levels. Additionally, the mean HbA1c level for the entire sample, irrespective of the treatment group, remained stable from baseline to the 18-month follow-up period.
+  
+keywords:
+  - Type 1 diabetes
+  - Structured education
+  - Patient education
+  - Follow-up
+bibliography: references.bib
+biblio-style: unsrt
+output: rticles::arxiv_article
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
-```{r}
-data <- read.csv("C:/Users/Luo Yunjie/Downloads/DAFNE_NC_May5_full.csv")
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+
+data <- read.csv("DAFNE_NC_May5_full.csv")
 if (!is.null(data$HBA1cRes)) {
   data$HBA1cRes <- (data$HBA1cRes - 2.15) * 10.929
 }
-```
 
-
-
-```{r, echo=FALSE}
-library(mice)
-library(VIM)
-library(tidyverse)
-# 因子转换
 data <- data %>%
   filter(Trx != "Non-DAFNE") %>%
   mutate(TimePoint = factor(TimePoint, levels = c(1, 2, 3, 4), labels = c("Baseline", "6months", "12months", "18months"))) %>%
   mutate(Trx = factor(Trx, levels = c("Dafne_FU", "Dafne"), labels = c("Control", "Intervention")))
-
-# 使用 mice 包进行多重插补 missing completely at random -> multiple imputation
-#imp <- mice(data, m=5, method='pmm', seed=500)
-
-# 检查插补结果
-#summary(imp)
-
-# 完成数据集
-#data <- completed_data <- complete(imp, 1)
 ```
 
-```{r, echo=FALSE}
-library(ggplot2)
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+data_pilot <- read.csv("DAFNE_NC_May5_sub4.csv")
+if (!is.null(data_pilot$HBA1cRes)) {
+  data_pilot$HBA1cRes <- (data_pilot$HBA1cRes - 2.15) * 10.929
+}
 
-data_filtered <- data %>%
-  filter(TimePoint %in% c("Baseline","18months"))
-
-ggplot(data_filtered, aes(x = Trx, y = HBA1cRes, color = TimePoint)) +
-  geom_boxplot() +
-  labs(title = "HBA1cRes at Baseline and 18 Months",
-       x = "Time Point",
-       y = "HBA1cRes") +
-  theme_minimal()
-
-
-```
-```{r}
-library(table1)
-# 创建改善数据框
-Improvement_df <- data %>%
-  filter(TimePoint %in% c("Baseline", "18months")) %>%
-  dplyr::select(UniqueID, TimePoint, Trx, HBA1cRes) %>%
-  tidyr::spread(TimePoint, HBA1cRes) %>%
-  dplyr::mutate(`Change in HBA1c` = `18months` - Baseline)
-
-table1(~ Baseline + `18months` + `Change in HBA1c` | Trx, data = Improvement_df)
+data_pilot <- data_pilot %>%
+  mutate(TimePoint = factor(TimePoint,levels = c(1,2, 3, 4), labels = c("Baseline","6months", "12months","18months"))) %>%
+  mutate(TimePoint = fct_relevel(TimePoint, c("Baseline", "6months", "12months", "18months"))) %>%
+  mutate(Trx = factor(Trx,levels = c("Dafne_FU","Dafne" ), labels = c("Control", "Intervention")))
+icc_dat <- data_pilot %>%
+  filter(TimePoint == "Baseline")
 ```
 
-```{r, out.width="200%"}
-ggplot(Improvement_df, aes(x = Trx, y = `Change in HBA1c`, color = Trx)) +
-  geom_boxplot() +
-  labs(
-    title = "Changes in HBA1cRes from Baseline to 18 Months",
-    subtitle = "Change is defined as HBA1c at 18 months - HBA1c at Baseline",
-    x = "Treatment Group",
-    y = "Change in HBA1c",
-    color = "Treatment"
-  ) +
-  geom_hline(aes(yintercept = 0), linetype = "dashed", color = "green") +
-  theme_minimal()
-```
-
-
-
-
-```{r}
-
-ggplot(Improvement_df, aes(x = Baseline, y = `18months`, color = Trx)) +
-  geom_point() +
-  labs(
-    title = "HBA1cRes at Baseline versus 18 Months",
-    x = "Baseline HBA1c",
-    y = "18 Months HBA1c",
-    color = "Treatment"
-  ) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "green", size = 1) +
-  geom_text(x = 57, y = 85, label = "18 months HBA1c > Baseline HBA1c", color = "black", size = 4) +
-  geom_text(x = 80, y = 50, label = "18 months HBA1c < Baseline HBA1c", color = "black", size = 4) +
-  theme_minimal()
-```
-
-
+## Sample size calculation
+### Sample size for randomized trial and cluster randomized Trial
 
 ```{r}
 library(lme4)
@@ -127,72 +82,93 @@ print(icc)
   print("No non-NA cases available for ICC calculation at Baseline.")
 }
 ```
+Using the estimated parameters, we estimated that 336 patients from 6 clusters would be required to detect a 0.5 percent (4 mmol/mol) difference in HbA1c with 90 percent power. Allowing for 15\% dropouts, the estimated sample size was increased to 390 patients across the 6 participating centres.
+
+# Exploratory data analysis
+
+```{r boxp, echo=FALSE, warning=FALSE, message=FALSE,  fig.align='center', out.width='70%', fig.cap="HBA1c measures at baseline and 18 months for control and intervention cohort."}
+library(ggplot2)
+
+data_filtered <- data %>%
+  filter(TimePoint %in% c("Baseline","18months"))
+
+ggplot(data_filtered, aes(x = Trx, y = HBA1cRes, color = TimePoint)) +
+  geom_boxplot() +
+  labs(title = "HBA1c at Baseline and 18 Months",
+       x = "Time Point",
+       y = "HBA1c") +
+  theme_minimal()
 
 
-```{r}
+```
+
+  
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(table1)
+Improvement_df <- data %>%
+  filter(TimePoint %in% c("Baseline", "18months")) %>%
+  dplyr::select(UniqueID, TimePoint, Trx, HBA1cRes) %>%
+  tidyr::spread(TimePoint, HBA1cRes) %>%
+  dplyr::mutate(`Change in HBA1c` = `18months` - Baseline)
+
+table1(~ Baseline + `18months` + `Change in HBA1c` | Trx, data = Improvement_df)
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width='70%', fig.cap="you need caption"}
+ggplot(Improvement_df, aes(x = Trx, y = `Change in HBA1c`, color = Trx)) +
+  geom_boxplot() +
+  labs(
+    title = "Changes in HBA1c from Baseline to 18 Months",
+    subtitle = "Change is defined as HBA1c at 18 months - HBA1c at Baseline",
+    x = "Treatment Group",
+    y = "Change in HBA1c",
+    color = "Treatment"
+  ) +
+  geom_hline(aes(yintercept = 0), linetype = "dashed", color = "green") +
+  theme_minimal()
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width='70%', fig.cap="you need caption"}
+ggplot(Improvement_df, aes(x = Baseline, y = `18months`, color = Trx)) +
+  geom_point() +
+  labs(
+    title = "HBA1cRes at Baseline versus 18 Months",
+    x = "Baseline HBA1c",
+    y = "18 Months HBA1c",
+    color = "Treatment"
+  ) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "green", size = 1) +
+  geom_text(x = 57, y = 85, label = "18 months HBA1c > Baseline HBA1c", color = "black", size = 4) +
+  geom_text(x = 80, y = 50, label = "18 months HBA1c < Baseline HBA1c", color = "black", size = 4) +
+  theme_minimal()
+```
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width='70%', fig.cap="you need caption"}
 traj_dat <- data %>%
   dplyr::select(UniqueID, TimePoint, Trx, HBA1cRes)
 
 traj_p <- ggplot(traj_dat, aes(x = factor(TimePoint), y = HBA1cRes, group = UniqueID, color = factor(UniqueID), linetype = Trx)) +
   geom_line() +
   theme_minimal() +
-  theme(legend.position = "none")
+ # theme(legend.position = "none") +
+  labs(
+    title = "HBA1cRes changes over time",
+    x = "Time Point",
+    y = "HBA1c level",
+    linetype = "Treatment"
+  )+
+  guides(color = "none")
 
 traj_p
 ```
-```{r}
-library(lmerTest)
-library(lme4)
-#model <- lmer(HBA1cRes ~ TimePoint + Trx + (1 | Centre) + (1|UniqueID), data = data)
-#(1 | Centre) means random intercepts for unique level of the factor centre
-
-#model <- lmer(HBA1cRes ~ TimePoint + Trx + (1 | Centre/UniqueID)  + (1 | gender) + (1 | Age), data = data)
-
-#model <- lmer(HBA1cRes ~ TimePoint * Trx + (1 + TimePoint | Centre), data = data)
-
-# model <- lmer(HBA1cRes ~ TimePoint + Age + gender + (1 | Centre) + (1|UniqueID), data = data)
 
 
-model <- lmer(HBA1cRes ~ TimePoint + Trx + Age + gender + (1 | Centre/UniqueID), data = data)
-
-summary(model)
-```
-Based on these results, there are no statistically significant differences in HbA1c changes over time between case and control patients.
-
-
-```{r}
-library(dplyr)
-library(ggplot2)
-library(plotly)
-
-traj_dat_g <- data %>%
-  dplyr::select(UniqueID, TimePoint, Trx, HBA1cRes, gender)
-
-traj_mean_overall <- traj_dat_g %>%
-  group_by(Trx, TimePoint) %>%
-  summarise(mean_HBA1cRes = mean(HBA1cRes, na.rm = TRUE), .groups = 'drop')
-
-
-traj_mean_overall_p <- ggplot(traj_mean_overall, aes(x = factor(TimePoint), y = mean_HBA1cRes, color = Trx)) +
-  geom_line(aes(group = Trx)) + 
-  geom_point() + 
-  labs(x = "Time Point", y = "Mean HBA1cRes", color = "Treatment Type") +  
-  scale_x_discrete(labels = c("Baseline", "6 Months", "12 Months", "18 Months")) + 
-  scale_color_discrete(name = "Treatment Type") + 
-  theme_minimal() +
-  ylim(c(20,90))+
-  theme(legend.position = "bottom") ##+ 
-  #facet_wrap(~ gender) 
-
-ggplotly(traj_mean_overall_p)
-
-```
-
-
-```{r}
-library(dplyr)
-library(ggplot2)
-library(plotly)
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width='70%', fig.cap="you need caption"}
+# library(plotly)
 
 traj_dat_g <- data %>%
   dplyr::select(UniqueID, TimePoint, Trx, HBA1cRes, gender)
@@ -205,16 +181,31 @@ traj_mean_gender <- traj_dat_g %>%
 traj_mean_gender_p <- ggplot(traj_mean_gender, aes(x = factor(TimePoint), y = mean_HBA1cRes, color = Trx)) +
   geom_line(aes(group = Trx)) + 
   geom_point() + 
-  labs(x = "Time Point", y = "Mean HBA1cRes", color = "Treatment Type") +  
+  labs(x = "Time Point", y = "Mean HBA1c", color = "Treatment Type") +  
   scale_x_discrete(labels = c("Baseline", "6 Months", "12 Months", "18 Months")) + 
-  scale_color_discrete(name = "Treatment Type") + 
+  scale_color_discrete(name = "Treatment") + 
   theme_minimal() +
   ylim(c(20,90))+
-  theme(legend.position = "bottom") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   facet_wrap(~ gender) 
 
-ggplotly(traj_mean_gender_p)
+# ggplotly(traj_mean_gender_p)
+traj_mean_gender_p
 ```
 
 
+
+# Model
+
+```{r, echo=FALSE}
+library(lmerTest)
+library(lme4)
+data_model <- data %>%
+  group_by(UniqueID) %>%
+  mutate(BaselineHbA1c = HBA1cRes[1]) %>%
+  filter(TimePoint != "Baseline")
+
+model <- lmer(HBA1cRes ~ BaselineHbA1c + TimePoint * Trx + (1 | Centre/UniqueID), data = data_model)
+summary(model)
+```
 
