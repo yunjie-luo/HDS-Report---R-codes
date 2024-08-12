@@ -1,0 +1,220 @@
+---
+title: "Untitled"
+author: "Yunjie"
+date: "2024-05-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+data <- read.csv("C:/Users/Luo Yunjie/Downloads/DAFNE_NC_May5_full.csv")
+if (!is.null(data$HBA1cRes)) {
+  data$HBA1cRes <- (data$HBA1cRes - 2.15) * 10.929
+}
+```
+
+
+
+```{r, echo=FALSE}
+library(mice)
+library(VIM)
+library(tidyverse)
+# 因子转换
+data <- data %>%
+  filter(Trx != "Non-DAFNE") %>%
+  mutate(TimePoint = factor(TimePoint, levels = c(1, 2, 3, 4), labels = c("Baseline", "6months", "12months", "18months"))) %>%
+  mutate(Trx = factor(Trx, levels = c("Dafne_FU", "Dafne"), labels = c("Control", "Intervention")))
+
+# 使用 mice 包进行多重插补 missing completely at random -> multiple imputation
+#imp <- mice(data, m=5, method='pmm', seed=500)
+
+# 检查插补结果
+#summary(imp)
+
+# 完成数据集
+#data <- completed_data <- complete(imp, 1)
+```
+
+```{r, echo=FALSE}
+library(ggplot2)
+
+data_filtered <- data %>%
+  filter(TimePoint %in% c("Baseline","18months"))
+
+ggplot(data_filtered, aes(x = Trx, y = HBA1cRes, color = TimePoint)) +
+  geom_boxplot() +
+  labs(title = "HBA1cRes at Baseline and 18 Months",
+       x = "Time Point",
+       y = "HBA1cRes") +
+  theme_minimal()
+
+
+```
+```{r}
+library(table1)
+# 创建改善数据框
+Improvement_df <- data %>%
+  filter(TimePoint %in% c("Baseline", "18months")) %>%
+  dplyr::select(UniqueID, TimePoint, Trx, HBA1cRes) %>%
+  tidyr::spread(TimePoint, HBA1cRes) %>%
+  dplyr::mutate(`Change in HBA1c` = `18months` - Baseline)
+
+table1(~ Baseline + `18months` + `Change in HBA1c` | Trx, data = Improvement_df)
+```
+
+```{r, out.width="200%"}
+ggplot(Improvement_df, aes(x = Trx, y = `Change in HBA1c`, color = Trx)) +
+  geom_boxplot() +
+  labs(
+    title = "Changes in HBA1cRes from Baseline to 18 Months",
+    subtitle = "Change is defined as HBA1c at 18 months - HBA1c at Baseline",
+    x = "Treatment Group",
+    y = "Change in HBA1c",
+    color = "Treatment"
+  ) +
+  geom_hline(aes(yintercept = 0), linetype = "dashed", color = "green") +
+  theme_minimal()
+```
+
+
+
+
+```{r}
+
+ggplot(Improvement_df, aes(x = Baseline, y = `18months`, color = Trx)) +
+  geom_point() +
+  labs(
+    title = "HBA1cRes at Baseline versus 18 Months",
+    x = "Baseline HBA1c",
+    y = "18 Months HBA1c",
+    color = "Treatment"
+  ) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "green", size = 1) +
+  geom_text(x = 57, y = 85, label = "18 months HBA1c > Baseline HBA1c", color = "black", size = 4) +
+  geom_text(x = 80, y = 50, label = "18 months HBA1c < Baseline HBA1c", color = "black", size = 4) +
+  theme_minimal()
+```
+
+
+
+```{r}
+library(lme4)
+# Filter data for ICC calculation at Baseline
+icc_dat <- data %>%
+  filter(TimePoint == "Baseline")
+
+# Check for non-NA values in HBA1cRes
+icc_dat <- icc_dat %>%
+  filter(!is.na(HBA1cRes))
+
+# Ensure there are non-NA cases
+if (nrow(icc_dat) > 0) {
+# Fit the linear mixed-effects model
+model <- lmer(HBA1cRes ~ 1 + (1 | Centre), data = icc_dat)
+  
+# Extract variance components
+varComp <- as.data.frame(VarCorr(model))
+sigma_between <- varComp$vcov[1]
+sigma_within <- attr(VarCorr(model), "sc")^2
+  
+# Calculate ICC
+icc <- sigma_between / (sigma_between + sigma_within)
+print(icc)
+} else {
+  print("No non-NA cases available for ICC calculation at Baseline.")
+}
+```
+
+
+```{r}
+traj_dat <- data %>%
+  dplyr::select(UniqueID, TimePoint, Trx, HBA1cRes)
+
+traj_p <- ggplot(traj_dat, aes(x = factor(TimePoint), y = HBA1cRes, group = UniqueID, color = factor(UniqueID), linetype = Trx)) +
+  geom_line() +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+traj_p
+```
+```{r}
+library(lmerTest)
+library(lme4)
+#model <- lmer(HBA1cRes ~ TimePoint + Trx + (1 | Centre) + (1|UniqueID), data = data)
+#(1 | Centre) means random intercepts for unique level of the factor centre
+
+#model <- lmer(HBA1cRes ~ TimePoint + Trx + (1 | Centre/UniqueID)  + (1 | gender) + (1 | Age), data = data)
+
+#model <- lmer(HBA1cRes ~ TimePoint * Trx + (1 + TimePoint | Centre), data = data)
+
+# model <- lmer(HBA1cRes ~ TimePoint + Age + gender + (1 | Centre) + (1|UniqueID), data = data)
+
+
+model <- lmer(HBA1cRes ~ TimePoint + Trx + Age + gender + (1 | Centre/UniqueID), data = data)
+
+summary(model)
+```
+Based on these results, there are no statistically significant differences in HbA1c changes over time between case and control patients.
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+traj_dat_g <- data %>%
+  dplyr::select(UniqueID, TimePoint, Trx, HBA1cRes, gender)
+
+traj_mean_overall <- traj_dat_g %>%
+  group_by(Trx, TimePoint) %>%
+  summarise(mean_HBA1cRes = mean(HBA1cRes, na.rm = TRUE), .groups = 'drop')
+
+
+traj_mean_overall_p <- ggplot(traj_mean_overall, aes(x = factor(TimePoint), y = mean_HBA1cRes, color = Trx)) +
+  geom_line(aes(group = Trx)) + 
+  geom_point() + 
+  labs(x = "Time Point", y = "Mean HBA1cRes", color = "Treatment Type") +  
+  scale_x_discrete(labels = c("Baseline", "6 Months", "12 Months", "18 Months")) + 
+  scale_color_discrete(name = "Treatment Type") + 
+  theme_minimal() +
+  ylim(c(20,90))+
+  theme(legend.position = "bottom") ##+ 
+  #facet_wrap(~ gender) 
+
+ggplotly(traj_mean_overall_p)
+
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+traj_dat_g <- data %>%
+  dplyr::select(UniqueID, TimePoint, Trx, HBA1cRes, gender)
+
+traj_mean_gender <- traj_dat_g %>%
+  group_by(Trx, TimePoint, gender) %>%
+  summarise(mean_HBA1cRes = mean(HBA1cRes, na.rm = TRUE), .groups = 'drop')
+
+
+traj_mean_gender_p <- ggplot(traj_mean_gender, aes(x = factor(TimePoint), y = mean_HBA1cRes, color = Trx)) +
+  geom_line(aes(group = Trx)) + 
+  geom_point() + 
+  labs(x = "Time Point", y = "Mean HBA1cRes", color = "Treatment Type") +  
+  scale_x_discrete(labels = c("Baseline", "6 Months", "12 Months", "18 Months")) + 
+  scale_color_discrete(name = "Treatment Type") + 
+  theme_minimal() +
+  ylim(c(20,90))+
+  theme(legend.position = "bottom") + 
+  facet_wrap(~ gender) 
+
+ggplotly(traj_mean_gender_p)
+```
+
+
+
